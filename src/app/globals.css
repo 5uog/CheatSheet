@@ -1,0 +1,57 @@
+/* FILE: src/app/globals.css */
+@import "tailwindcss";
+
+:root {
+    color-scheme: dark;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+.wrap-break-word {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(244, 244, 245, 0.28) rgba(24, 24, 27, 0.55);
+}
+
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+    background: rgba(24, 24, 27, 0.55);
+    border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: rgba(244, 244, 245, 0.22);
+    border-radius: 999px;
+    border: 2px solid rgba(24, 24, 27, 0.55);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: rgba(244, 244, 245, 0.34);
+}
+
+*::-webkit-scrollbar-thumb:active {
+    background: rgba(244, 244, 245, 0.46);
+}
+
+*::-webkit-scrollbar-corner {
+    background: rgba(24, 24, 27, 0.55);
+}
+
+body {
+    -webkit-overflow-scrolling: touch;
+}

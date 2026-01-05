@@ -1,0 +1,8 @@
+// FILE: .vscode/settings.json
+{
+    "files.associations": {
+        "*.tsx": "typescriptreact",
+        "*.jsx": "javascriptreact"
+    },
+    "html.validate.enable": false
+}
