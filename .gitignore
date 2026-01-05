@@ -10,6 +10,11 @@
 !.yarn/releases
 !.yarn/versions
 
+# dev runtime artifacts only
+/dev/build/
+/dev/**/*.log
+/dev/**/*.db
+
 # testing
 /coverage
 
