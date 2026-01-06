@@ -1,7 +1,7 @@
-// FILE: src/components/lib/answer-utils.ts
+// FILE: src/app/features/lib/answer-utils.ts
 "use client";
 
-import type { AnswerJson } from "./question-types";
+import type { AnswerJson } from "@/app/features/lib/question-types";
 
 export function answerTypeLabel(t: AnswerJson["type"]) {
     switch (t) {

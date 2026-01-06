@@ -1,6 +1,6 @@
-// FILE: src/components/lib/question-fetch-all.ts
-import type { Item, SortKey } from "./question-types";
-import { apiListQuestions } from "./question-api";
+// FILE: src/app/features/lib/question-fetch-all.ts
+import type { Item, SortKey } from "@/app/features/lib/question-types";
+import { apiListQuestions } from "@/app/features/lib/question-api";
 
 export async function fetchAllQuestions(params?: {
     pageSize?: number;

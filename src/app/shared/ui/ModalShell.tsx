@@ -1,8 +1,8 @@
-// FILE: src/components/ui/modal-shell.tsx
+// FILE: src/app/shared/ui/ModalShell.tsx
 "use client";
 
 import type { ReactNode } from "react";
-import { cls } from "../lib/question-utils";
+import { cls } from "@/app/features/lib/question-utils";
 
 export function ModalShell(props: {
     open: boolean;

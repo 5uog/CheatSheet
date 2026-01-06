@@ -2,20 +2,23 @@
 "use client";
 
 import { useState } from "react";
-import { EditQuestionDialog } from "@/components/dialogs/edit-question-dialog";
-import { SegmentedTabs } from "@/components/ui/segmented-tabs";
-import { QuestionCreatePanel } from "@/components/panels/question-create-panel";
-import { QuestionItemsPanel } from "@/components/panels/question-items-panel";
-import { QuestionSearchPanel } from "@/components/panels/question-search-panel";
-import { EditorIdePanel, type EditorDiagnostics } from "@/components/panels/editor-ide-panel";
-import { EditorStatusPanel } from "@/components/panels/editor-status-panel";
-import { useQuestionDb } from "@/components/hooks/use-question-db";
-import type { Item } from "@/components/lib/question-types";
+import { EditQuestionDialog } from "@/app/features/components/EditQuestionDialog";
+import { SegmentedTabs } from "@/app/shared/ui/SegmentedTabs";
+import { QuestionCreatePanel } from "@/app/features/components/QuestionCreatePanel";
+import { QuestionItemsPanel } from "@/app/features/components/QuestionItemsPanel";
+import { QuestionSearchPanel } from "@/app/features/components/QuestionSearchPanel";
+import { EditorIdePanel, type EditorDiagnostics } from "@/app/features/components/EditorIdePanel";
+import { EditorStatusPanel } from "@/app/features/components/EditorStatusPanel";
+import { useQuestionDb } from "@/app/features/hooks/useQuestionDb";
+import type { Item } from "@/app/features/lib/question-types";
+import { useI18n } from "@/app/shared/i18n/client";
+import { LanguageToggleButton } from "@/app/shared/ui/LanguageToggleButton";
 
 type PanelTab = "search" | "create" | "editor";
 
 export default function Page() {
     const db = useQuestionDb();
+    const { t } = useI18n();
 
     const [editOpen, setEditOpen] = useState(false);
     const [editItem, setEditItem] = useState<Item | null>(null);
@@ -32,11 +35,11 @@ export default function Page() {
         <div className="space-y-4">
             <SegmentedTabs
                 value={tab}
-                onChange={(t) => setTab(t)}
+                onChange={(tKey) => setTab(tKey)}
                 tabs={[
-                    { key: "search", label: "Search" },
-                    { key: "create", label: "Create" },
-                    { key: "editor", label: "Editor" },
+                    { key: "search", label: t("search.title") },
+                    { key: "create", label: t("create.title") },
+                    { key: "editor", label: t("editor.title") },
                 ]}
                 ariaLabel="Panels"
             />
@@ -69,6 +72,8 @@ export default function Page() {
                 <QuestionCreatePanel
                     newBody={db.newBody}
                     setNewBody={db.setNewBody}
+                    newExplanation={db.newExplanation}
+                    setNewExplanation={db.setNewExplanation}
                     newKind={db.newKind}
                     setNewKind={db.setNewKind}
                     newOptions={db.newOptions}
@@ -138,12 +143,16 @@ export default function Page() {
     return (
         <div className="min-h-dvh bg-zinc-950 text-zinc-50">
             <div className="mx-auto max-w-7xl px-4 py-10">
-                <header className="mb-6">
-                    <h1 className="text-3xl font-semibold tracking-tight">Question DB</h1>
-                    <p className="mt-2 text-sm text-zinc-300">
-                        Local SQLite (FTS5). CRUD + query DSL.{" "}
-                        {db.tokenizer ? <span className="text-zinc-400">Tokenizer: {db.tokenizer}</span> : null}
-                    </p>
+                <header className="mb-6 flex items-start justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-semibold tracking-tight">Question DB</h1>
+                        <p className="mt-2 text-sm text-zinc-300">
+                            Local SQLite (FTS5). CRUD + query DSL.{" "}
+                            {db.tokenizer ? <span className="text-zinc-400">Tokenizer: {db.tokenizer}</span> : null}
+                        </p>
+                    </div>
+
+                    <LanguageToggleButton className="shrink-0" />
                 </header>
 
                 {db.error && (

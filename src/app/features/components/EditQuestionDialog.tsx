@@ -1,14 +1,16 @@
-// FILE: src/components/dialogs/edit-question-dialog.tsx
+// FILE: src/app/features/components/EditQuestionDialog.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { TagsEditor } from "../editors/tags-editor";
-import { ThumbnailsEditor } from "../editors/thumbnails-editor";
-import type { AnswerJson, Item } from "../lib/question-types";
-import { cls, normalizeTags, normalizeThumbs } from "../lib/question-utils";
-import { apiUpdateQuestion } from "../lib/question-api";
-import { answerTypeLabel, safeInt } from "../lib/answer-utils";
-import { ModalShell } from "../ui/modal-shell";
+import { TagsEditor } from "@/app/features/editors/TagsEditor";
+import { ThumbnailsEditor } from "@/app/features/editors/ThumbnailsEditor";
+import { ExplanationEditor } from "@/app/features/editors/ExplanationEditor";
+import type { AnswerJson, Item } from "@/app/features/lib/question-types";
+import { cls, normalizeExplanation, normalizeTags, normalizeThumbs } from "@/app/features/lib/question-utils";
+import { apiUpdateQuestion } from "@/app/features/lib/question-api";
+import { answerTypeLabel, safeInt } from "@/app/features/lib/answer-utils";
+import { ModalShell } from"@/app/shared/ui/ModalShell";
+import { useI18n } from "@/app/shared/i18n/client";
 
 export function EditQuestionDialog(props: {
     open: boolean;
@@ -18,8 +20,10 @@ export function EditQuestionDialog(props: {
     setError: (msg: string | null) => void;
 }) {
     const { open, item, onClose, onSaved, setError } = props;
+    const { t } = useI18n();
 
     const [body, setBody] = useState("");
+    const [explanation, setExplanation] = useState("");
 
     const [answerType, setAnswerType] = useState<AnswerJson["type"]>("boolean");
 
@@ -39,6 +43,7 @@ export function EditQuestionDialog(props: {
         if (!item) return;
 
         setBody(item.body);
+        setExplanation(item.explanation ?? "");
         setTags(normalizeTags(item.tags ?? []));
         setThumbs(normalizeThumbs(item.thumbnails ?? []));
 
@@ -75,14 +80,14 @@ export function EditQuestionDialog(props: {
 
         const nextBody = body.trim();
         if (!nextBody) {
-            setError("Body cannot be empty.");
+            setError(t("edit.body_empty"));
             return;
         }
 
         if (answerType === "choice") {
             const opts = choiceOptions.map((x) => x.trim()).filter(Boolean);
             if (opts.length === 0) {
-                setError("Choice: add at least 1 option.");
+                setError(t("edit.choice.need_option"));
                 return;
             }
             const maxIdx = opts.length - 1;
@@ -91,7 +96,7 @@ export function EditQuestionDialog(props: {
                 .map((n) => Math.trunc(n))
                 .filter((n) => n >= 0 && n <= maxIdx);
             if (corr.length === 0) {
-                setError("Choice: select at least 1 correct option.");
+                setError(t("edit.choice.need_correct"));
                 return;
             }
         }
@@ -102,6 +107,7 @@ export function EditQuestionDialog(props: {
             const r = await apiUpdateQuestion(item.id, {
                 body: nextBody,
                 answer: computedAnswer,
+                explanation: normalizeExplanation(explanation),
                 tags: normalizeTags(tags),
                 thumbnails: normalizeThumbs(thumbs),
             });
@@ -124,15 +130,17 @@ export function EditQuestionDialog(props: {
                 <>
                     <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
                         <div className="min-w-0">
-                            <div className="text-sm font-medium text-zinc-100">Edit</div>
-                            <div className="text-xs text-zinc-500">ID {item.id}</div>
+                            <div className="text-sm font-medium text-zinc-100">{t("edit.title")}</div>
+                            <div className="text-xs text-zinc-500">
+                                {t("edit.id")} {item.id}
+                            </div>
                         </div>
                         <button
                             type="button"
                             onClick={onClose}
                             className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-950/70"
                         >
-                            Close
+                            {t("common.close")}
                         </button>
                     </div>
 
@@ -140,7 +148,7 @@ export function EditQuestionDialog(props: {
                         <form onSubmit={onSubmit} className="space-y-5 p-5">
                             <div className="space-y-2">
                                 <label className="block text-xs text-zinc-400" htmlFor="editBody">
-                                    Body
+                                    {t("edit.body")}
                                 </label>
                                 <textarea
                                     id="editBody"
@@ -150,16 +158,20 @@ export function EditQuestionDialog(props: {
                                 />
                             </div>
 
+                            <ExplanationEditor value={explanation} onChange={setExplanation} />
+
                             <div className="grid gap-4 lg:grid-cols-2">
                                 <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4 shadow">
                                     <div className="flex items-center justify-between">
-                                        <div className="text-sm font-medium text-zinc-200">Answer</div>
-                                        <div className="text-xs text-zinc-500">Current: {answerTypeLabel(answerType)}</div>
+                                        <div className="text-sm font-medium text-zinc-200">{t("edit.answer")}</div>
+                                        <div className="text-xs text-zinc-500">
+                                            {t("edit.answer.current")}: {answerTypeLabel(answerType)}
+                                        </div>
                                     </div>
 
                                     <div className="mt-3">
                                         <label className="block text-xs text-zinc-400" htmlFor="ansType">
-                                            Type
+                                            {t("edit.answer.type")}
                                         </label>
                                         <select
                                             id="ansType"
@@ -167,16 +179,16 @@ export function EditQuestionDialog(props: {
                                             onChange={(e) => setAnswerType(e.target.value as AnswerJson["type"])}
                                             className="mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-500"
                                         >
-                                            <option value="boolean">Boolean (True/False)</option>
-                                            <option value="choice">Choice (1..N)</option>
-                                            <option value="blank">Blank</option>
-                                            <option value="text">Text</option>
+                                            <option value="boolean">{t("edit.answer.boolean")}</option>
+                                            <option value="choice">{t("edit.answer.choice")}</option>
+                                            <option value="blank">{t("edit.answer.blank")}</option>
+                                            <option value="text">{t("edit.answer.text")}</option>
                                         </select>
                                     </div>
 
                                     {answerType === "boolean" && (
                                         <fieldset className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3 text-sm text-zinc-200">
-                                            <legend className="px-1 text-xs text-zinc-400">Value</legend>
+                                            <legend className="px-1 text-xs text-zinc-400">{t("edit.answer.value")}</legend>
                                             <div className="flex items-center gap-4">
                                                 <label className="flex items-center gap-2" htmlFor="editTrue">
                                                     <input
@@ -186,7 +198,7 @@ export function EditQuestionDialog(props: {
                                                         checked={boolValue === 1}
                                                         onChange={() => setBoolValue(1)}
                                                     />
-                                                    True
+                                                    {t("edit.answer.true")}
                                                 </label>
                                                 <label className="flex items-center gap-2" htmlFor="editFalse">
                                                     <input
@@ -196,7 +208,7 @@ export function EditQuestionDialog(props: {
                                                         checked={boolValue === 0}
                                                         onChange={() => setBoolValue(0)}
                                                     />
-                                                    False
+                                                    {t("edit.answer.false")}
                                                 </label>
                                             </div>
                                         </fieldset>
@@ -204,7 +216,7 @@ export function EditQuestionDialog(props: {
 
                                     {answerType === "choice" && (
                                         <div className="mt-4 space-y-3">
-                                            <div className="text-xs text-zinc-400">Options</div>
+                                            <div className="text-xs text-zinc-400">{t("edit.choice.options")}</div>
                                             <div className="space-y-2">
                                                 {choiceOptions.map((v, i) => (
                                                     <div key={i} className="flex items-center gap-2">
@@ -228,7 +240,7 @@ export function EditQuestionDialog(props: {
                                                             }}
                                                             className="shrink-0 rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-950/70"
                                                         >
-                                                            Remove
+                                                            {t("common.remove")}
                                                         </button>
                                                     </div>
                                                 ))}
@@ -240,7 +252,7 @@ export function EditQuestionDialog(props: {
                                                     onClick={() => setChoiceOptions((xs) => [...xs, ""])}
                                                     className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-950/70"
                                                 >
-                                                    Add Option
+                                                    {t("common.add")}
                                                 </button>
                                                 <button
                                                     type="button"
@@ -252,11 +264,11 @@ export function EditQuestionDialog(props: {
                                                     }}
                                                     className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-950/70"
                                                 >
-                                                    Normalize
+                                                    {t("common.normalize")}
                                                 </button>
                                             </div>
 
-                                            <div className="text-xs text-zinc-400">Correct (indices, comma-separated)</div>
+                                            <div className="text-xs text-zinc-400">{t("edit.choice.correct_indices")}</div>
                                             <input
                                                 value={choiceCorrect.join(",")}
                                                 onChange={(e) => {
@@ -276,23 +288,21 @@ export function EditQuestionDialog(props: {
                                                 placeholder="e.g. 0,2"
                                             />
 
-                                            <div className="text-xs text-zinc-500">
-                                                Index is 0-based. (Option1 =&gt; 0, Option2 =&gt; 1, ...)
-                                            </div>
+                                            <div className="text-xs text-zinc-500">{t("edit.choice.index_hint")}</div>
                                         </div>
                                     )}
 
                                     {answerType === "blank" && (
                                         <div className="mt-4 space-y-2">
                                             <label className="block text-xs text-zinc-400" htmlFor="blankValue">
-                                                Answer (blank)
+                                                {t("edit.blank.label")}
                                             </label>
                                             <input
                                                 id="blankValue"
                                                 value={blankValue}
                                                 onChange={(e) => setBlankValue(e.target.value)}
                                                 className="w-full rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-500"
-                                                placeholder="Expected text"
+                                                placeholder={t("edit.blank.placeholder")}
                                             />
                                         </div>
                                     )}
@@ -300,14 +310,14 @@ export function EditQuestionDialog(props: {
                                     {answerType === "text" && (
                                         <div className="mt-4 space-y-2">
                                             <label className="block text-xs text-zinc-400" htmlFor="textValue">
-                                                Answer (text)
+                                                {t("edit.text.label")}
                                             </label>
                                             <textarea
                                                 id="textValue"
                                                 value={textValue}
                                                 onChange={(e) => setTextValue(e.target.value)}
                                                 className="min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-500"
-                                                placeholder="Expected text"
+                                                placeholder={t("edit.text.placeholder")}
                                             />
                                         </div>
                                     )}
@@ -325,7 +335,7 @@ export function EditQuestionDialog(props: {
                                     onClick={onClose}
                                     className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-950/70"
                                 >
-                                    Cancel
+                                    {t("common.cancel")}
                                 </button>
                                 <button
                                     type="submit"
@@ -336,7 +346,7 @@ export function EditQuestionDialog(props: {
                                         saving && "opacity-60"
                                     )}
                                 >
-                                    Save
+                                    {t("common.save")}
                                 </button>
                             </div>
                         </form>

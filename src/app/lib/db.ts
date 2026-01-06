@@ -1,4 +1,18 @@
-// FILE: src/lib/db.ts
+/**
+ * FILE: src/lib/db.ts
+ *
+ * This module owns the process-local SQLite database handle and performs idempotent, on-start schema
+ * initialization for the application. It provisions the data directory layout, configures a small
+ * set of SQLite pragmas that materially affect durability and constraint behavior, and ensures that
+ * legacy columns are migrated into the current JSON-backed column set without requiring an external
+ * migration runner. It also manages the FTS5 virtual table and its trigger-based synchronization
+ * with the base table, selecting an available tokenizer at runtime, persisting that choice in a
+ * metadata table, and rebuilding the FTS objects when the tokenizer policy changes or when a repair
+ * operation is explicitly requested. The exported surface is intentionally small: callers receive
+ * the database handle, the selected tokenizer, and the uploads directory path, while recovery logic
+ * remains centralized so that higher layers do not need to embed low-level FTS lifecycle details.
+ */
+
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
@@ -44,6 +58,7 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS questions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         body TEXT NOT NULL,
+        explanation TEXT NOT NULL DEFAULT (''),
         answer_json TEXT NOT NULL DEFAULT ('{"type":"boolean","value":1}'),
         tags_json TEXT NOT NULL DEFAULT ('[]'),
         thumbs_json TEXT NOT NULL DEFAULT ('[]'),
@@ -73,6 +88,7 @@ ensureColumn(
 );
 ensureColumn("questions", "tags_json", `ALTER TABLE questions ADD COLUMN tags_json TEXT NOT NULL DEFAULT ('[]');`);
 ensureColumn("questions", "thumbs_json", `ALTER TABLE questions ADD COLUMN thumbs_json TEXT NOT NULL DEFAULT ('[]');`);
+ensureColumn("questions", "explanation", `ALTER TABLE questions ADD COLUMN explanation TEXT NOT NULL DEFAULT ('');`);
 
 if (hasColumn("questions", "answer") && hasColumn("questions", "answer_json")) {
     db.exec(`

@@ -5,6 +5,10 @@ import path from "node:path";
 const nextConfig: NextConfig = {
     reactCompiler: true,
     devIndicators: false,
+
+    // Allow accessing dev assets from LAN origin(s).
+    allowedDevOrigins: ["192.168.2.123"],
+
     turbopack: {
         resolveAlias: {
             "@": path.join(process.cwd(), "src"),

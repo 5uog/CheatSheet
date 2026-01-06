@@ -1,16 +1,21 @@
-// FILE: src/components/panels/question-create-panel.tsx
+// FILE: src/app/features/panels/QuestionCreatePanel.tsx
 "use client";
 
 import type React from "react";
-import type { Kind } from "../lib/question-types";
-import { isNewKind } from "../lib/question-types";
-import { cls } from "../lib/question-utils";
-import { TagsEditor } from "../editors/tags-editor";
-import { ThumbnailsEditor } from "../editors/thumbnails-editor";
+import type { Kind } from "@/app/features/lib/question-types";
+import { isNewKind } from "@/app/features/lib/question-types";
+import { cls } from "@/app/features/lib/question-utils";
+import { TagsEditor } from "@/app/features/editors/TagsEditor";
+import { ThumbnailsEditor } from "@/app/features/editors/ThumbnailsEditor";
+import { ExplanationEditor } from "@/app/features/editors/ExplanationEditor";
+import { useI18n } from "@/app/shared/i18n/client";
 
 export function QuestionCreatePanel(props: {
     newBody: string;
     setNewBody: React.Dispatch<React.SetStateAction<string>>;
+
+    newExplanation: string;
+    setNewExplanation: React.Dispatch<React.SetStateAction<string>>;
 
     newKind: Exclude<Kind, "blank">;
     setNewKind: React.Dispatch<React.SetStateAction<Exclude<Kind, "blank">>>;
@@ -47,6 +52,8 @@ export function QuestionCreatePanel(props: {
     const {
         newBody,
         setNewBody,
+        newExplanation,
+        setNewExplanation,
         newKind,
         setNewKind,
         newOptions,
@@ -55,36 +62,34 @@ export function QuestionCreatePanel(props: {
         setNewCorrectIndices,
         newCorrectText,
         setNewCorrectText,
-
         createTagInput,
         setCreateTagInput,
         createTags,
         setCreateTags,
-
         createThumbUrl,
         setCreateThumbUrl,
         createThumbs,
         setCreateThumbs,
-
         createUploading,
         uploadCreateFiles,
-
         saving,
         onCreate,
         setError,
     } = props;
 
+    const { t } = useI18n();
+
     return (
         <section className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl">
             <div className="border-b border-zinc-800 px-5 py-4">
-                <div className="text-sm font-medium text-zinc-100">Create</div>
-                <div className="mt-1 text-xs text-zinc-500">Add a new question with tags and thumbnails.</div>
+                <div className="text-sm font-medium text-zinc-100">{t("create.title")}</div>
+                <div className="mt-1 text-xs text-zinc-500">{t("create.subtitle")}</div>
             </div>
 
             <form onSubmit={onCreate} className="space-y-5 p-5">
                 <div className="space-y-2">
                     <label className="block text-xs text-zinc-400" htmlFor="newKind">
-                        Kind
+                        {t("create.kind")}
                     </label>
                     <select
                         id="newKind"
@@ -95,45 +100,48 @@ export function QuestionCreatePanel(props: {
                         }}
                         className="w-full rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-500"
                     >
-                        <option value="boolean">Boolean (True/False)</option>
-                        <option value="choice">Choice</option>
-                        <option value="text">Text</option>
+                        <option value="boolean">{t("edit.answer.boolean")}</option>
+                        <option value="choice">{t("edit.answer.choice")}</option>
+                        <option value="text">{t("edit.answer.text")}</option>
                     </select>
                 </div>
 
                 <div className="space-y-2">
                     <label className="block text-xs text-zinc-400" htmlFor="newBody">
-                        Body
+                        {t("create.body")}
                     </label>
                     <textarea
                         id="newBody"
                         value={newBody}
                         onChange={(e) => setNewBody(e.target.value)}
                         className="min-h-40 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-500"
-                        placeholder="Enter question text"
+                        placeholder={t("create.body.placeholder")}
                     />
                 </div>
+
+                <ExplanationEditor value={newExplanation} onChange={setNewExplanation} />
 
                 <section className="space-y-4">
                     <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
                         <div className="flex items-center justify-between">
-                            <div className="text-sm font-medium text-zinc-200">Answer</div>
+                            <div className="text-sm font-medium text-zinc-200">{t("create.answer.title")}</div>
                             <div className="text-xs text-zinc-500">
-                                Type: {newKind === "boolean" ? "Boolean" : newKind === "choice" ? "Choice" : "Text"}
+                                {t("create.answer.type")}:{" "}
+                                {newKind === "boolean" ? "Boolean" : newKind === "choice" ? "Choice" : "Text"}
                             </div>
                         </div>
 
                         {newKind !== "text" && (
                             <div className="mt-4 space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <div className="text-xs text-zinc-400">Options</div>
+                                    <div className="text-xs text-zinc-400">{t("create.answer.options")}</div>
                                     {newKind === "choice" && (
                                         <button
                                             type="button"
                                             onClick={() => setNewOptions((xs) => [...xs, ""])}
                                             className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-950/70"
                                         >
-                                            Add Option
+                                            {t("create.answer.add_option")}
                                         </button>
                                     )}
                                 </div>
@@ -182,7 +190,7 @@ export function QuestionCreatePanel(props: {
                                                         }}
                                                         className="shrink-0 rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-950/70"
                                                     >
-                                                        Remove
+                                                        {t("common.remove")}
                                                     </button>
                                                 )}
                                             </div>
@@ -190,21 +198,21 @@ export function QuestionCreatePanel(props: {
                                     })}
                                 </div>
 
-                                <div className="text-xs text-zinc-500">Check the correct option(s). (Choice supports 1..N.)</div>
+                                <div className="text-xs text-zinc-500">{t("create.answer.check_hint")}</div>
                             </div>
                         )}
 
                         {newKind === "text" && (
                             <div className="mt-4 space-y-2">
                                 <label className="block text-xs text-zinc-400" htmlFor="newCorrectText">
-                                    Correct (optional; leave empty for free-form)
+                                    {t("create.text.correct_label")}
                                 </label>
                                 <textarea
                                     id="newCorrectText"
                                     value={newCorrectText}
                                     onChange={(e) => setNewCorrectText(e.target.value)}
                                     className="min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-500"
-                                    placeholder="Expected answer (optional)"
+                                    placeholder={t("create.text.correct_placeholder")}
                                 />
                             </div>
                         )}
@@ -215,13 +223,13 @@ export function QuestionCreatePanel(props: {
                         onChange={(next) => setCreateTags(next)}
                         inputValue={createTagInput}
                         setInputValue={(v) => setCreateTagInput(v)}
-                        title="Tags"
+                        title={t("tags.title")}
                     />
 
                     <ThumbnailsEditor
                         value={createThumbs}
                         onChange={(next) => setCreateThumbs(next)}
-                        title="Thumbnails"
+                        title={t("thumbs.title")}
                         setError={setError}
                         enableUpload
                         urlInputValue={createThumbUrl}
@@ -241,7 +249,7 @@ export function QuestionCreatePanel(props: {
                             (saving || createUploading) && "opacity-60"
                         )}
                     >
-                        Create
+                        {t("common.create")}
                     </button>
                 </div>
             </form>

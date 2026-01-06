@@ -1,4 +1,17 @@
-// FILE: src/app/lib/uploads.ts
+/**
+ * FILE: src/app/lib/uploads.ts
+ *
+ * This module implements local file upload persistence and retrieval utilities for API routes that
+ * accept multipart form data. It defines a constrained file acceptance policy based on a fixed set
+ * of image extensions and hard size limits, and it writes validated blobs into a dedicated uploads
+ * directory under the application data path. For addressing, it generates unique basenames and
+ * returns stable API URLs for later retrieval, while separate helpers validate basenames and reject
+ * traversal attempts by disallowing path separators and dot-dot segments even after URL decoding.
+ *
+ * The route layer uses these limits to enforce an early Content-Length gate when available; the
+ * library still defends itself by re-checking individual file sizes after materialization.
+ */
+
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -9,6 +22,9 @@ const ALLOWED_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
 // Hard caps to avoid memory blowups from formData()/arrayBuffer()
 export const MAX_UPLOAD_FILE_BYTES = 8 * 1024 * 1024; // 8MB
 export const MAX_UPLOAD_FILES = 20;
+
+// Conservative upper bound for total request size (files + multipart overhead).
+export const MAX_UPLOAD_TOTAL_BYTES = MAX_UPLOAD_FILES * MAX_UPLOAD_FILE_BYTES + 2 * 1024 * 1024; // +2MB overhead
 
 export function safeExt(filename: string): string {
     const ext = path.extname(filename || "").toLowerCase();

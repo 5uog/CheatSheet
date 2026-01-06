@@ -1,15 +1,17 @@
-// FILE: src/components/hooks/use-question-db.tsx
+// FILE: src/app/features/hooks/useQuestionDb.tsx
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AnswerJson, Item, Kind, Mode, SortKey } from "../lib/question-types";
-import { normalizeTags, normalizeThumbs, uniqTrim } from "../lib/question-utils";
-import { apiCreateQuestion, apiDeleteQuestion, apiGetMeta, apiListQuestions, apiUploadImages } from "../lib/question-api";
-import { useToast } from "@/components/ui/toast";
-import { buildExportJson } from "../lib/editor-utils";
+import type { AnswerJson, Item, Kind, Mode, SortKey } from "@/app/features/lib/question-types";
+import { normalizeExplanation, normalizeTags, normalizeThumbs, uniqTrim } from "@/app/features/lib/question-utils";
+import { apiCreateQuestion, apiDeleteQuestion, apiGetMeta, apiListQuestions, apiUploadImages } from "@/app/features/lib/question-api";
+import { useToast } from "@/app/shared/ui/ToastProvider";
+import { buildExportJson } from "@/app/features/lib/editor-utils";
+import { useI18n } from "@/app/shared/i18n/client";
 
 export function useQuestionDb() {
     const toast = useToast();
+    const { t } = useI18n();
 
     const [q, setQ] = useState("");
     const [appliedQ, setAppliedQ] = useState("");
@@ -36,6 +38,7 @@ export function useQuestionDb() {
 
     // Create state
     const [newBody, setNewBody] = useState("");
+    const [newExplanation, setNewExplanation] = useState("");
     const [newKind, setNewKind] = useState<Exclude<Kind, "blank">>("boolean");
 
     const [createTagInput, setCreateTagInput] = useState("");
@@ -127,9 +130,9 @@ export function useQuestionDb() {
     }, [newKind]);
 
     function addCreateTagFromInput() {
-        const t = createTagInput.trim();
-        if (!t) return;
-        setCreateTags((xs) => normalizeTags([...xs, t]));
+        const tt = createTagInput.trim();
+        if (!tt) return;
+        setCreateTags((xs) => normalizeTags([...xs, tt]));
         setCreateTagInput("");
     }
 
@@ -149,14 +152,14 @@ export function useQuestionDb() {
             const r = await apiUploadImages(files);
             if (!r.ok) {
                 setError(r.error);
-                toast.push({ kind: "error", message: `アップロードに失敗しました: ${r.error}` });
+                toast.push({ kind: "error", message: t("toast.upload_failed", { msg: r.error }) });
                 return;
             }
             if (r.data.urls.length) {
                 setCreateThumbs((xs) => normalizeThumbs([...xs, ...r.data.urls]));
-                toast.push({ kind: "success", message: `アップロードしました（${r.data.urls.length}件）` });
+                toast.push({ kind: "success", message: t("toast.upload_ok", { n: r.data.urls.length }) });
             } else {
-                toast.push({ kind: "error", message: "アップロードに失敗しました: 有効な画像がありません" });
+                toast.push({ kind: "error", message: t("toast.upload_no_valid") });
             }
         } finally {
             setCreateUploading(false);
@@ -247,6 +250,7 @@ export function useQuestionDb() {
         const body = newBody.trim();
         if (!body) return;
 
+        const explanation = normalizeExplanation(newExplanation);
         const tags = normalizeTags(createTags);
         const thumbnails = normalizeThumbs(createThumbs);
         const answer = buildCreateAnswer();
@@ -256,23 +260,24 @@ export function useQuestionDb() {
 
             const exists = all.some((it) => (it.body ?? "").trim() === body && it.answer?.type === answer.type);
             if (exists) {
-                toast.push({ kind: "info", message: "既に存在します（body と answer type が一致）" });
+                toast.push({ kind: "info", message: t("toast.create_exists_local") });
                 return;
             }
 
             setSaving(true);
             setError(null);
 
-            const r = await apiCreateQuestion({ body, answer, tags, thumbnails });
+            const r = await apiCreateQuestion({ body, answer, explanation, tags, thumbnails });
 
             if (!r.ok) {
-                if (r.status === 409) toast.push({ kind: "info", message: "既に存在します（サーバ側判定）" });
-                else toast.push({ kind: "error", message: `作成に失敗しました: ${r.error}` });
+                if (r.status === 409) toast.push({ kind: "info", message: t("toast.create_exists_server") });
+                else toast.push({ kind: "error", message: t("toast.create_failed", { msg: r.error }) });
                 setError(r.error);
                 return;
             }
 
             setNewBody("");
+            setNewExplanation("");
             setNewKind("boolean");
             resetCreateStateForKind("boolean");
 
@@ -290,7 +295,7 @@ export function useQuestionDb() {
             setPage(1);
             await fetchItems(appliedQ, 1);
 
-            toast.push({ kind: "success", message: "作成しました" });
+            toast.push({ kind: "success", message: t("toast.create_ok") });
         } finally {
             setSaving(false);
         }
@@ -306,7 +311,7 @@ export function useQuestionDb() {
         if (!r.ok) {
             setItems(prev);
             setError(r.error);
-            toast.push({ kind: "error", message: `削除に失敗しました: ${r.error}` });
+            toast.push({ kind: "error", message: t("toast.delete_failed", { msg: r.error }) });
             return;
         }
 
@@ -316,12 +321,11 @@ export function useQuestionDb() {
         setPage(next);
         await fetchItems(appliedQ, next);
 
-        toast.push({ kind: "success", message: "削除しました" });
+        toast.push({ kind: "success", message: t("toast.delete_ok") });
     }
 
     const loadCurrentEditorJson = useCallback(async () => {
         const all = await (async () => {
-            // reuse robust full export (used by editor panel too)
             return await fetchAllQuestionsRobust();
         })();
         return buildExportJson(all);
@@ -379,6 +383,8 @@ export function useQuestionDb() {
 
         newBody,
         setNewBody,
+        newExplanation,
+        setNewExplanation,
         newKind,
         setNewKind,
 

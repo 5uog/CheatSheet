@@ -1,10 +1,11 @@
-// FILE: src/components/editors/thumbnails-editor.tsx
+// FILE: src/app/features/editors/ThumbnailsEditor.tsx
 "use client";
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
-import { cls, isProbablyImageUrl, normalizeThumbs } from "../lib/question-utils";
-import { apiUploadImages } from "../lib/question-api";
+import { cls, isProbablyImageUrl, normalizeThumbs } from "@/app/features/lib/question-utils";
+import { apiUploadImages } from "@/app/features/lib/question-api";
+import { useI18n } from "@/app/shared/i18n/client";
 
 export function ThumbnailsEditor(props: {
     title?: string;
@@ -15,16 +16,14 @@ export function ThumbnailsEditor(props: {
     compact?: boolean;
     maxPreview?: number;
 
-    // Optional controlled URL input (useful for Create panel)
     urlInputValue?: string;
     setUrlInputValue?: (v: string) => void;
 
-    // Optional external upload handler (useful for Create panel)
     uploadFiles?: (files: FileList | null) => Promise<void>;
     uploading?: boolean;
 }) {
     const {
-        title = "Thumbnails",
+        title,
         value,
         onChange,
         setError,
@@ -36,6 +35,9 @@ export function ThumbnailsEditor(props: {
         uploadFiles: externalUploadFiles,
         uploading: externalUploading,
     } = props;
+
+    const { t } = useI18n();
+    const resolvedTitle = title ?? t("thumbs.title");
 
     const [localUrlInput, setLocalUrlInput] = useState("");
     const [localUploading, setLocalUploading] = useState(false);
@@ -58,7 +60,6 @@ export function ThumbnailsEditor(props: {
         if (!enableUpload) return;
         if (!files || files.length === 0) return;
 
-        // Prefer external handler if provided
         if (externalUploadFiles) {
             await externalUploadFiles(files);
             return;
@@ -81,8 +82,10 @@ export function ThumbnailsEditor(props: {
     return (
         <div className={cls("rounded-2xl border border-zinc-800 bg-zinc-950/40 shadow", compact ? "p-3" : "p-4")}>
             <div className="flex items-center justify-between">
-                <div className="text-sm font-medium text-zinc-200">{title}</div>
-                <div className="text-xs text-zinc-500">{value.length} saved</div>
+                <div className="text-sm font-medium text-zinc-200">{resolvedTitle}</div>
+                <div className="text-xs text-zinc-500">
+                    {value.length} {t("thumbs.saved")}
+                </div>
             </div>
 
             <div className="mt-3 flex items-center gap-2">
@@ -96,21 +99,21 @@ export function ThumbnailsEditor(props: {
                         }
                     }}
                     className="w-full rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-500"
-                    placeholder="Add URL (Enter)"
+                    placeholder={t("thumbs.add_url")}
                 />
                 <button
                     type="button"
                     onClick={addFromInput}
                     className="shrink-0 rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-950/70"
                 >
-                    Add
+                    {t("common.add")}
                 </button>
             </div>
 
             {enableUpload && (
                 <div className="mt-3">
                     <label className="block text-xs text-zinc-400" htmlFor="thumbFilesShared">
-                        Upload local files (images)
+                        {t("thumbs.upload_label")}
                     </label>
                     <input
                         id="thumbFilesShared"
@@ -121,7 +124,7 @@ export function ThumbnailsEditor(props: {
                         disabled={uploading}
                         className="mt-2 block w-full text-sm text-zinc-200 file:mr-3 file:rounded-xl file:border file:border-zinc-800 file:bg-zinc-950/40 file:px-3 file:py-2 file:text-xs file:text-zinc-200 hover:file:bg-zinc-950/70"
                     />
-                    {uploading && <div className="mt-2 text-xs text-zinc-500">Uploading...</div>}
+                    {uploading && <div className="mt-2 text-xs text-zinc-500">{t("thumbs.uploading")}</div>}
                 </div>
             )}
 
@@ -134,7 +137,7 @@ export function ThumbnailsEditor(props: {
                             target="_blank"
                             rel="noreferrer"
                             className="group relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/30"
-                            title="Open"
+                            title={t("common.open")}
                         >
                             <div className="relative h-28 w-full">
                                 <Image
@@ -165,14 +168,14 @@ export function ThumbnailsEditor(props: {
                             onClick={() => onChange(value.filter((x) => x !== u))}
                             className="shrink-0 rounded-xl border border-zinc-800 bg-zinc-950/40 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-950/70"
                         >
-                            Remove
+                            {t("common.remove")}
                         </button>
                     </div>
                 ))}
-                {value.length === 0 && <div className="text-xs text-zinc-500">No thumbnails.</div>}
+                {value.length === 0 && <div className="text-xs text-zinc-500">{t("thumbs.none")}</div>}
             </div>
 
-            {value.length > 0 && <div className="mt-2 text-xs text-zinc-500">Tip: thumbnails are shown inline in the list.</div>}
+            {value.length > 0 && <div className="mt-2 text-xs text-zinc-500">{t("thumbs.tip_inline")}</div>}
         </div>
     );
 }

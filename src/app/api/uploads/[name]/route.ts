@@ -1,4 +1,12 @@
-// FILE: src/app/api/uploads/[name]/route.ts
+/**
+ * FILE: src/app/api/uploads/[name]/route.ts
+ *
+ * This route module serves previously stored upload blobs by a validated basename key. It performs
+ * strict path-safety checks to prevent traversal, reads the corresponding file from the uploads
+ * directory, and returns the raw bytes with an inferred content type. Responses are marked no-store
+ * to avoid caching stale blobs when the underlying local filesystem state changes.
+ */
+
 import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, jsonError } from "@/app/api/_shared/http";
 import { readParams, type ParamsLike } from "@/app/api/_shared/params";

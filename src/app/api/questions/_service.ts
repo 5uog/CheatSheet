@@ -1,9 +1,21 @@
-// FILE: src/app/api/questions/_service.ts
+/**
+ * FILE: src/app/api/questions/_service.ts
+ *
+ * This module implements application-level procedures for the questions domain, including input
+ * normalization across schema versions and corruption-aware mutation workflows. It consolidates
+ * SQLite corruption recovery by attempting a repository mutation, repairing the questions FTS
+ * objects on corruption-class failures, and retrying before falling back to a last-resort
+ * base-table mutation that bypasses FTS plumbing. It also defines deterministic transformations
+ * that convert validated request payloads into the exact persistent shapes used by the repository,
+ * so route handlers can remain transport-focused while normalization and cross-version
+ * interpretation stay centralized.
+ */
+
 import { db, ftsTokenizer, isSqliteCorruptionError, repairQuestionsFts } from "@/app/lib/db";
 import { parseQuery } from "@/app/lib/search";
-import type { AnswerJson, Kind } from "./_schemas";
-import { normalizeChoiceAnswer, serializeAnswer } from "./_schemas";
-import * as repo from "./_repo";
+import type { AnswerJson, Kind } from "@/app/api/questions/_schemas";
+import { normalizeChoiceAnswer, normalizeStringArray, serializeAnswer } from "@/app/api/questions/_schemas";
+import * as repo from "@/app/api/questions/_repo";
 
 export function shouldAutoFallbackToLike(originalQ: string) {
     const q = (originalQ ?? "").trim();
@@ -47,9 +59,21 @@ export function shouldAutoFallbackToLike(originalQ: string) {
     return false;
 }
 
-export function updateQuestionWithRetry(args: {
+export function parseSearch(q: string) {
+    if (shouldAutoFallbackToLike(q)) {
+        const likeParsed = parseQuery(`~${q}`);
+        if (likeParsed.kind === "like") {
+            return { ...likeParsed, autoFallback: true as const };
+        }
+    }
+    const parsed = parseQuery(q);
+    return { ...parsed, autoFallback: false as const };
+}
+
+export function updateQuestionRobust(args: {
     id: number;
     nextBody: string;
+    nextExplanation: string;
     nextAnswer: string;
     nextTags: string;
     nextThumbs: string;
@@ -62,10 +86,18 @@ export function updateQuestionWithRetry(args: {
     }
 
     repairQuestionsFts();
-    repo.updateById(args);
+
+    try {
+        repo.updateById(args);
+        return;
+    } catch (e2) {
+        if (!isSqliteCorruptionError(e2)) throw e2;
+    }
+
+    repo.updateBaseTableById(args);
 }
 
-export function deleteQuestionWithRetry(id: number) {
+export function deleteQuestionRobust(id: number) {
     try {
         repo.deleteById(id);
         return;
@@ -74,55 +106,7 @@ export function deleteQuestionWithRetry(id: number) {
     }
 
     repairQuestionsFts();
-    repo.deleteById(id);
-}
 
-/**
- * Consolidates corruption recovery into the service layer.
- * Keeps route handlers I/O-bound and deterministic.
- * Uses a staged fallback: repo -> rebuild FTS -> retry -> direct base-table mutation.
- * Direct SQL is a last resort to preserve availability under persistent FTS faults.
- */
-export function updateQuestionRobust(args: {
-    id: number;
-    nextBody: string;
-    nextAnswer: string;
-    nextTags: string;
-    nextThumbs: string;
-}) {
-    try {
-        updateQuestionWithRetry(args);
-        return;
-    } catch (e) {
-        if (!isSqliteCorruptionError(e)) throw e;
-    }
-
-    repairQuestionsFts();
-    try {
-        repo.updateById(args);
-        return;
-    } catch (e2) {
-        if (!isSqliteCorruptionError(e2)) throw e2;
-    }
-
-    // Final fallback: mutate base table while preserving legacy invariants
-    repo.updateBaseTableById(args);
-}
-
-/**
- * Consolidates corruption recovery into the service layer.
- * Prefers repo invariants; escalates only on corruption-class failures.
- * Final fallback bypasses FTS plumbing and targets the base table directly.
- */
-export function deleteQuestionRobust(id: number) {
-    try {
-        deleteQuestionWithRetry(id);
-        return;
-    } catch (e) {
-        if (!isSqliteCorruptionError(e)) throw e;
-    }
-
-    repairQuestionsFts();
     try {
         repo.deleteById(id);
         return;
@@ -184,13 +168,51 @@ export function buildCreateAnswer(data: unknown): { answer: AnswerJson; answerJs
     return { answer, answerJson };
 }
 
-export function parseSearch(q: string) {
-    if (shouldAutoFallbackToLike(q)) {
-        const likeParsed = parseQuery(`~${q}`);
-        if (likeParsed.kind === "like") {
-            return { ...likeParsed, autoFallback: true as const };
-        }
-    }
-    const parsed = parseQuery(q);
-    return { ...parsed, autoFallback: false as const };
+export function buildCreatePayload(data: unknown):
+    | { ok: true; body: string; explanation: string; answerJson: string; tagsJson: string; thumbsJson: string }
+    | { ok: false; error: "empty_body" } {
+    const d = data as { body?: unknown; explanation?: unknown; tags?: unknown; thumbnails?: unknown };
+
+    const body = String(d.body ?? "").trim();
+    if (!body) return { ok: false, error: "empty_body" };
+
+    const explanation = typeof d.explanation === "string" ? d.explanation : "";
+    const explanationTrimmed = explanation.trim();
+
+    const { answerJson } = buildCreateAnswer(data);
+
+    const tags = normalizeStringArray(Array.isArray(d.tags) ? (d.tags as string[]) : [], 200);
+    const thumbs = normalizeStringArray(Array.isArray(d.thumbnails) ? (d.thumbnails as string[]) : [], 200);
+
+    return {
+        ok: true,
+        body,
+        explanation: explanationTrimmed,
+        answerJson,
+        tagsJson: JSON.stringify(tags),
+        thumbsJson: JSON.stringify(thumbs),
+    };
+}
+
+export function buildUpdatePayload(args: {
+    existing: repo.ItemRow;
+    patch: { body?: string; explanation?: string; answer?: AnswerJson; tags?: string[]; thumbnails?: string[] };
+}):
+    | { ok: true; nextBody: string; nextExplanation: string; nextAnswer: string; nextTags: string; nextThumbs: string }
+    | { ok: false; error: "empty_body" } {
+    const { existing, patch } = args;
+
+    const nextBody = (patch.body ?? existing.body).trim();
+    if (!nextBody) return { ok: false, error: "empty_body" };
+
+    const nextExplanation = (patch.explanation ?? existing.explanation ?? "").trim();
+
+    const nextAnswer = patch.answer ? serializeAnswer(patch.answer) : existing.answer_json;
+
+    const nextTags = patch.tags != null ? JSON.stringify(normalizeStringArray(patch.tags, 200)) : existing.tags_json;
+
+    const nextThumbs =
+        patch.thumbnails != null ? JSON.stringify(normalizeStringArray(patch.thumbnails, 200)) : existing.thumbs_json;
+
+    return { ok: true, nextBody, nextExplanation, nextAnswer, nextTags, nextThumbs };
 }

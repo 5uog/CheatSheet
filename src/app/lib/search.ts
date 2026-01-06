@@ -1,4 +1,17 @@
-// FILE: src/lib/search.ts
+/**
+ * FILE: src/lib/search.ts
+ *
+ * This module implements a small query language parser used by the questions collection endpoint.
+ * It tokenizes a user-supplied string, parses it into a boolean expression AST with support for
+ * parentheses, OR, and a unary minus operator used as NOT at token boundaries, and then lowers the
+ * AST into either an FTS5 MATCH string or a parameterized SQL LIKE predicate. The lowering step
+ * applies conservative escaping rules: quoted phrases are produced when tokens contain characters
+ * that would otherwise be ambiguous to the FTS query grammar, and LIKE literals escape wildcard
+ * metacharacters so user input is treated as data rather than pattern syntax. The exported function
+ * returns a discriminated result so callers can route empty queries and choose execution strategy
+ * without exceptions or out-of-band sentinels.
+ */
+
 export type ParsedQuery =
     | { kind: "empty" }
     | { kind: "exact"; body: string }
@@ -18,9 +31,6 @@ function isWs(ch: string) {
 }
 
 function isUnaryMinusAt(s: string, i: number): boolean {
-    // Treat '-' as unary NOT only when it appears at a token boundary:
-    // - at start, or after whitespace, or after '('
-    // and it is followed by a non-whitespace character.
     if (s[i] !== "-") return false;
     const prev = i > 0 ? s[i - 1] : "";
     const next = i + 1 < s.length ? s[i + 1] : "";
@@ -66,9 +76,7 @@ function tokenize(input: string): Tok[] {
         }
 
         let j = i;
-        // IMPORTANT: allow '-' inside words (e.g., "full-text")
         while (j < s.length && !isWs(s[j]) && s[j] !== "(" && s[j] !== ")" && s[j] !== '"') {
-            // Stop token before unary '-' only if it is at boundary (handled on next loop)
             if (s[j] === "-" && isUnaryMinusAt(s, j)) break;
             j++;
         }
@@ -184,27 +192,21 @@ function sanitizeWord(w: string): { text: string; phrase: boolean; wildcard: boo
     const wildcard = raw.endsWith("*") && raw.length > 1;
     const core = wildcard ? raw.slice(0, -1) : raw;
 
-    // keep multi-script and symbols; only remove control chars and surrounding quotes
     const cleaned = core.replace(/[\u0000-\u001F\u007F]/g, "").replace(/^"+|"+$/g, "").trim();
     if (!cleaned) return { text: "", phrase: false, wildcard: false };
 
-    // If it contains spaces, treat it as phrase-like term (we'll quote it in FTS)
     const phrase = /\s/.test(cleaned);
 
     return { text: wildcard ? `${cleaned}*` : cleaned, phrase, wildcard };
 }
 
 function escapeFtsPhrase(s: string): string {
-    // FTS5: escape " inside phrase by doubling it
     return s.replace(/"/g, `""`);
 }
 
 function needsQuotingForFts(token: string): boolean {
-    // Quote if it contains characters that may confuse FTS query parser.
-    // Allow common safe set and a terminal '*' wildcard.
     const t = token.endsWith("*") ? token.slice(0, -1) : token;
     if (!t) return true;
-    // safe: letters, numbers, underscore, hyphen, and Japanese scripts; everything else -> quote
     return /[^\p{L}\p{N}_\-]/u.test(t);
 }
 
@@ -230,7 +232,6 @@ function wrap(n: Node): string {
 }
 
 function escapeLikeLiteral(s: string): string {
-    // escape backslash first, then LIKE wildcards
     return s.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
@@ -261,14 +262,12 @@ export function parseQuery(input: string): ParsedQuery {
     const q = (input ?? "").trim();
     if (!q) return { kind: "empty" };
 
-    // exact match (full body)
     if (q.startsWith("=")) {
         const body = q.slice(1).trim();
         if (!body) return { kind: "empty" };
         return { kind: "exact", body };
     }
 
-    // explicit LIKE mode (useful for extremely short terms / symbols)
     if (q.startsWith("~")) {
         const rest = q.slice(1).trim();
         if (!rest) return { kind: "empty" };

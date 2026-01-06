@@ -1,4 +1,4 @@
-// FILE: src/components/lib/question-types.ts
+// FILE: src/app/features/lib/question-types.ts
 export type AnswerJson =
     | { type: "boolean"; value: 0 | 1 }
     | { type: "choice"; options: string[]; correct: number[] }
@@ -11,6 +11,7 @@ export type Item = {
     id: number;
     body: string;
     answer: AnswerJson;
+    explanation: string;
     tags: string[];
     thumbnails: string[];
     created_at: string;

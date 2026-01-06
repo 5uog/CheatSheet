@@ -1,10 +1,20 @@
-// FILE: src/app/api/questions/[id]/route.ts
-import { jsonError, jsonInvalidPayload, jsonOk } from "@/app/api/_shared/http";
+/**
+ * FILE: src/app/api/questions/[id]/route.ts
+ *
+ * This route module exposes mutation endpoints for a single question resource while keeping the
+ * route layer constrained to transport responsibilities. It performs path-parameter decoding, a
+ * bounded request-body read, and schema validation, then delegates normalization and persistence
+ * to the questions domain service layer. Client input defects are reported deterministically as
+ * 400-class JSON errors, and unexpected persistence failures are surfaced as 500 responses with a
+ * stable `{ error }` shape, avoiding the use of thrown exceptions as part of normal validation flow.
+ */
+
+import { jsonError, jsonInvalidPayloadFromBodyRead, jsonOk } from "@/app/api/_shared/http";
 import { readPositiveIntId } from "@/app/api/_shared/ids";
 import { readJsonBodySafe } from "@/app/api/_shared/body";
-import { UpdateSchema, normalizeStringArray, serializeAnswer } from "../_schemas";
-import * as service from "../_service";
-import * as repo from "../_repo";
+import { UpdateSchema } from "@/app/api/questions/_schemas";
+import * as service from "@/app/api/questions/_service";
+import * as repo from "@/app/api/questions/_repo";
 
 type Ctx = import("@/app/api/_shared/params").ParamsLike<{ id: string }>;
 
@@ -16,39 +26,19 @@ export async function PUT(req: Request, ctx: Ctx) {
     if (!id) return jsonError(400, { error: "bad id" });
 
     const bodyRead = await readJsonBodySafe(req, 1_000_000);
-    if (!bodyRead.ok) {
-        const reason =
-            bodyRead.error === "too_large"
-                ? { body: "too large" }
-                : bodyRead.error === "empty"
-                    ? { body: "empty" }
-                    : { body: "invalid json" };
-        return jsonInvalidPayload(reason);
-    }
+    if (!bodyRead.ok) return jsonInvalidPayloadFromBodyRead(bodyRead);
 
     const parsed = UpdateSchema.safeParse(bodyRead.data);
-    if (!parsed.success) {
-        return jsonInvalidPayload(parsed.error.flatten());
-    }
+    if (!parsed.success) return jsonError(400, { error: "invalid payload", details: parsed.error.flatten() });
 
     const existing = repo.getById(id);
     if (!existing) return jsonError(404, { error: "not found" });
 
-    const nextBody = (parsed.data.body ?? existing.body).trim();
-    if (!nextBody) return jsonError(400, { error: "body cannot be empty" });
-
-    const nextAnswer = parsed.data.answer ? serializeAnswer(parsed.data.answer) : existing.answer_json;
-
-    const nextTags =
-        parsed.data.tags != null ? JSON.stringify(normalizeStringArray(parsed.data.tags, 200)) : existing.tags_json;
-
-    const nextThumbs =
-        parsed.data.thumbnails != null
-            ? JSON.stringify(normalizeStringArray(parsed.data.thumbnails, 200))
-            : existing.thumbs_json;
+    const built = service.buildUpdatePayload({ existing, patch: parsed.data });
+    if (!built.ok) return jsonError(400, { error: "invalid payload", details: { body: "empty" } });
 
     try {
-        service.updateQuestionRobust({ id, nextBody, nextAnswer, nextTags, nextThumbs });
+        service.updateQuestionRobust({ id, ...built });
     } catch (e) {
         const msg = String((e as { message?: unknown } | null)?.message ?? "update failed");
         return jsonError(500, { error: msg });

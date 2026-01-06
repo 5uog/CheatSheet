@@ -1,8 +1,8 @@
-// FILE: src/components/ui/segmented-tabs.tsx
+// FILE: src/app/shared/ui/SegmentedTabs.tsx
 "use client";
 
 import { useEffect, useId, useMemo, useRef } from "react";
-import { cls } from "../lib/question-utils";
+import { cls } from "@/app/features/lib/question-utils";
 
 export type SegTab<T extends string> = { key: T; label: string };
 

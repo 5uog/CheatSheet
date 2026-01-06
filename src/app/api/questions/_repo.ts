@@ -1,10 +1,24 @@
-// FILE: src/app/api/questions/_repo.ts
+/**
+ * FILE: src/app/api/questions/_repo.ts
+ *
+ * This module implements the repository boundary for the questions domain on top of a local
+ * SQLite database connection. It exposes narrowly scoped read and write operations that execute
+ * parameterized SQL against the base table and returns either raw rows or a mapped transport-ready
+ * shape. Row mapping is deliberately defensive for JSON-backed columns: answer, tags, and thumbnail
+ * fields are parsed through schema-aware safe parsers so that malformed persisted JSON degrades to
+ * stable defaults instead of propagating exceptions into route handlers. The module also contains
+ * legacy-schema compatibility for an older `answer` column by detecting its presence at runtime and
+ * maintaining its invariant during inserts and updates, allowing the application to operate across
+ * mixed on-disk schemas without duplicating compatibility logic in higher layers.
+ */
+
 import { db } from "@/app/lib/db";
-import { safeParseAnswerJson, safeParseJsonArray } from "./_schemas";
+import { safeParseAnswerJson, safeParseJsonArray } from "@/app/api/questions/_schemas";
 
 export type ItemRow = {
     id: number;
     body: string;
+    explanation: string;
     answer_json: string;
     tags_json: string;
     thumbs_json: string;
@@ -15,6 +29,7 @@ export type ItemRow = {
 export type QuestionItem = {
     id: number;
     body: string;
+    explanation: string;
     answer: ReturnType<typeof safeParseAnswerJson>;
     tags: string[];
     thumbnails: string[];
@@ -26,6 +41,7 @@ export function mapRow(r: ItemRow): QuestionItem {
     return {
         id: r.id,
         body: r.body,
+        explanation: typeof r.explanation === "string" ? r.explanation : "",
         answer: safeParseAnswerJson(r.answer_json),
         tags: safeParseJsonArray(r.tags_json),
         thumbnails: safeParseJsonArray(r.thumbs_json),
@@ -50,13 +66,11 @@ function legacyAnswerValueFromAnswerJson(answerJson: string): 0 | 1 {
 
 export function getById(id: number): ItemRow | undefined {
     return db
-        .prepare(
-            `
-            SELECT id, body, answer_json, tags_json, thumbs_json, created_at, updated_at
+        .prepare(`
+            SELECT id, body, explanation, answer_json, tags_json, thumbs_json, created_at, updated_at
             FROM questions
             WHERE id = ?
-        `
-        )
+        `)
         .get(id) as ItemRow | undefined;
 }
 
@@ -67,34 +81,34 @@ export function deleteById(id: number) {
 function updateQuestionsBaseTable(args: {
     id: number;
     nextBody: string;
+    nextExplanation: string;
     nextAnswer: string;
     nextTags: string;
     nextThumbs: string;
 }) {
     if (HAS_LEGACY_ANSWER_COL) {
         const legacy = legacyAnswerValueFromAnswerJson(args.nextAnswer);
-        db.prepare(
-            `
+        db.prepare(`
             UPDATE questions
-            SET body = ?, answer_json = ?, tags_json = ?, thumbs_json = ?, answer = ?, updated_at = datetime('now')
+            SET body = ?, explanation = ?, answer_json = ?, tags_json = ?, thumbs_json = ?, answer = ?, updated_at = datetime('now')
             WHERE id = ?
-        `
-        ).run(args.nextBody, args.nextAnswer, args.nextTags, args.nextThumbs, legacy, args.id);
+        `)
+        .run(args.nextBody, args.nextExplanation, args.nextAnswer, args.nextTags, args.nextThumbs, legacy, args.id);
         return;
     }
 
-    db.prepare(
-        `
+    db.prepare(`
         UPDATE questions
-        SET body = ?, answer_json = ?, tags_json = ?, thumbs_json = ?, updated_at = datetime('now')
+        SET body = ?, explanation = ?, answer_json = ?, tags_json = ?, thumbs_json = ?, updated_at = datetime('now')
         WHERE id = ?
-    `
-    ).run(args.nextBody, args.nextAnswer, args.nextTags, args.nextThumbs, args.id);
+    `)
+    .run(args.nextBody, args.nextExplanation, args.nextAnswer, args.nextTags, args.nextThumbs, args.id);
 }
 
 export function updateById(args: {
     id: number;
     nextBody: string;
+    nextExplanation: string;
     nextAnswer: string;
     nextTags: string;
     nextThumbs: string;
@@ -109,6 +123,7 @@ export function updateById(args: {
 export function updateBaseTableById(args: {
     id: number;
     nextBody: string;
+    nextExplanation: string;
     nextAnswer: string;
     nextTags: string;
     nextThumbs: string;
@@ -116,29 +131,31 @@ export function updateBaseTableById(args: {
     updateQuestionsBaseTable(args);
 }
 
-export function insertOne(args: { body: string; answerJson: string; tagsJson: string; thumbsJson: string }) {
+export function insertOne(args: {
+    body: string;
+    explanation: string;
+    answerJson: string;
+    tagsJson: string;
+    thumbsJson: string;
+}) {
     if (HAS_LEGACY_ANSWER_COL) {
         const legacy = legacyAnswerValueFromAnswerJson(args.answerJson);
-        db.prepare(
-            `
-            INSERT INTO questions(body, answer_json, tags_json, thumbs_json, answer) VALUES (?, ?, ?, ?, ?)
-        `
-        ).run(args.body, args.answerJson, args.tagsJson, args.thumbsJson, legacy);
+        db.prepare(`
+            INSERT INTO questions(body, explanation, answer_json, tags_json, thumbs_json, answer) VALUES (?, ?, ?, ?, ?, ?)
+        `)
+        .run(args.body, args.explanation, args.answerJson, args.tagsJson, args.thumbsJson, legacy);
     } else {
-        db.prepare(
-            `
-            INSERT INTO questions(body, answer_json, tags_json, thumbs_json) VALUES (?, ?, ?, ?)
-        `
-        ).run(args.body, args.answerJson, args.tagsJson, args.thumbsJson);
+        db.prepare(`
+            INSERT INTO questions(body, explanation, answer_json, tags_json, thumbs_json) VALUES (?, ?, ?, ?, ?)
+        `)
+        .run(args.body, args.explanation, args.answerJson, args.tagsJson, args.thumbsJson);
     }
 
     return db
-        .prepare(
-            `
-            SELECT id, body, answer_json, tags_json, thumbs_json, created_at, updated_at
+        .prepare(`
+            SELECT id, body, explanation, answer_json, tags_json, thumbs_json, created_at, updated_at
             FROM questions
             WHERE id = last_insert_rowid()
-        `
-        )
+        `)
         .get() as ItemRow | undefined;
 }

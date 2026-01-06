@@ -1,11 +1,22 @@
-// FILE: src/app/api/questions/route.ts
+/**
+ * FILE: src/app/api/questions/route.ts
+ *
+ * This route module exposes collection-level query and creation endpoints for questions while
+ * keeping the handler logic transport-oriented. On reads, it parses query-string parameters into
+ * paging, sorting, and filter primitives, delegates query-language parsing to the domain service,
+ * and executes parameterized SQL without embedding normalization policy into the route layer. On
+ * creates, it uses the shared bounded JSON reader and Zod validation, then delegates canonical
+ * payload construction to the service layer so that trimming, cross-version interpretation, and
+ * JSON serialization are not duplicated across endpoints.
+ */
+
 import { db, ftsTokenizer } from "@/app/lib/db";
-import { jsonInvalidPayload, jsonOk } from "@/app/api/_shared/http";
+import { jsonError, jsonInvalidPayloadFromBodyRead, jsonOk } from "@/app/api/_shared/http";
 import { readJsonBodySafe } from "@/app/api/_shared/body";
-import { CreateAnySchema, normalizeStringArray } from "./_schemas";
-import { isKind, parsePaging, parseSort, buildFilters } from "./_query";
-import * as service from "./_service";
-import * as repo from "./_repo";
+import { CreateAnySchema } from "@/app/api/questions/_schemas";
+import { isKind, parsePaging, parseSort, buildFilters } from "@/app/api/questions/_query";
+import * as service from "@/app/api/questions/_service";
+import * as repo from "@/app/api/questions/_repo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +50,7 @@ export async function GET(req: Request) {
 
         const rows = db
             .prepare(`
-                SELECT q.id, q.body, q.answer_json, q.tags_json, q.thumbs_json, q.created_at, q.updated_at
+                SELECT q.id, q.body, q.explanation, q.answer_json, q.tags_json, q.thumbs_json, q.created_at, q.updated_at
                 FROM questions q
                 ${whereSql}
                 ORDER BY ${orderBy}
@@ -68,7 +79,7 @@ export async function GET(req: Request) {
 
         const rows = db
             .prepare(`
-                SELECT q.id, q.body, q.answer_json, q.tags_json, q.thumbs_json, q.created_at, q.updated_at
+                SELECT q.id, q.body, q.explanation, q.answer_json, q.tags_json, q.thumbs_json, q.created_at, q.updated_at
                 FROM questions q
                 ${whereSql}
                 ORDER BY ${orderBy}
@@ -88,9 +99,6 @@ export async function GET(req: Request) {
     }
 
     if (parsed.kind === "fts") {
-        // IMPORTANT:
-        // SQLite FTS MATCH does NOT reliably accept table aliases on the left operand.
-        // Use the real virtual table name (questions_fts) for MATCH, even if we alias it in FROM.
         const whereParts: string[] = [`questions_fts MATCH ?`, ...filters.where];
         const args: unknown[] = [parsed.match, ...filters.args];
         const whereSql = `WHERE ${whereParts.join(" AND ")}`;
@@ -106,7 +114,7 @@ export async function GET(req: Request) {
 
         const rows = db
             .prepare(`
-                SELECT q.id, q.body, q.answer_json, q.tags_json, q.thumbs_json, q.created_at, q.updated_at
+                SELECT q.id, q.body, q.explanation, q.answer_json, q.tags_json, q.thumbs_json, q.created_at, q.updated_at
                 FROM questions_fts f
                 JOIN questions q ON q.id = f.rowid
                 ${whereSql}
@@ -135,7 +143,7 @@ export async function GET(req: Request) {
 
         const rows = db
             .prepare(`
-                SELECT q.id, q.body, q.answer_json, q.tags_json, q.thumbs_json, q.created_at, q.updated_at
+                SELECT q.id, q.body, q.explanation, q.answer_json, q.tags_json, q.thumbs_json, q.created_at, q.updated_at
                 FROM questions q
                 ${whereSql}
                 ORDER BY ${orderBy}
@@ -156,40 +164,22 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
     const bodyRead = await readJsonBodySafe(req, 1_000_000);
-    if (!bodyRead.ok) {
-        const reason =
-            bodyRead.error === "too_large"
-                ? { body: "too large" }
-                : bodyRead.error === "empty"
-                    ? { body: "empty" }
-                    : { body: "invalid json" };
-        return jsonInvalidPayload(reason);
-    }
+    if (!bodyRead.ok) return jsonInvalidPayloadFromBodyRead(bodyRead);
 
     const parsed = CreateAnySchema.safeParse(bodyRead.data);
+    if (!parsed.success) return jsonError(400, { error: "invalid payload", details: parsed.error.flatten() });
 
-    if (!parsed.success) {
-        return jsonInvalidPayload(parsed.error.flatten());
-    }
-
-    const body = parsed.data.body.trim();
-    if (!body) {
-        return jsonInvalidPayload({ body: "empty" });
-    }
-
-    const { answerJson } = service.buildCreateAnswer(parsed.data);
-
-    const tags = normalizeStringArray(parsed.data.tags ?? [], 200);
-    const thumbs = normalizeStringArray(parsed.data.thumbnails ?? [], 200);
+    const built = service.buildCreatePayload(parsed.data);
+    if (!built.ok) return jsonError(400, { error: "invalid payload", details: { body: "empty" } });
 
     const row = repo.insertOne({
-        body,
-        answerJson,
-        tagsJson: JSON.stringify(tags),
-        thumbsJson: JSON.stringify(thumbs),
+        body: built.body,
+        explanation: built.explanation,
+        answerJson: built.answerJson,
+        tagsJson: built.tagsJson,
+        thumbsJson: built.thumbsJson,
     });
 
     const item = row ? repo.mapRow(row) : null;
-
     return jsonOk({ item }, { status: 201 });
 }

@@ -1,4 +1,4 @@
-// FILE: src/components/ui/monaco-json-editor.tsx
+// FILE: src/app/shared/ui/MonacoJsonEditor.tsx
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";

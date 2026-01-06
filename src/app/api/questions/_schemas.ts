@@ -1,4 +1,15 @@
-// FILE: src/app/api/questions/_schemas.ts
+/**
+ * FILE: src/app/api/questions/_schemas.ts
+ *
+ * This module defines the canonical JSON shapes used by the questions API and the corresponding
+ * Zod validators that enforce structural and size constraints at the transport boundary. It also
+ * provides small, deterministic normalization and serialization utilities for answer payloads and
+ * string arrays so that persistence-layer JSON text is produced in a predictable form. In addition,
+ * it offers defensive parsing helpers for JSON persisted in text columns: invalid or unexpected
+ * values are mapped to stable defaults rather than raising, which allows repository reads to remain
+ * total with respect to corrupted rows while still returning typed data to callers.
+ */
+
 import { z } from "zod";
 
 export type AnswerJson =
@@ -22,6 +33,7 @@ export const AnswerSchema: z.ZodType<AnswerJson> = z.union([
 
 export const UpdateSchema = z.object({
     body: z.string().min(1).max(20000).optional(),
+    explanation: z.string().max(20000).optional(),
     answer: AnswerSchema.optional(),
     tags: z.array(z.string().min(1).max(200)).max(200).optional(),
     thumbnails: z.array(z.string().min(1).max(2000)).max(200).optional(),
@@ -29,6 +41,7 @@ export const UpdateSchema = z.object({
 
 export const CreateSchema = z.object({
     body: z.string().min(1).max(20000),
+    explanation: z.string().max(20000).optional(),
     answer: AnswerSchema,
     tags: z.array(z.string().min(1).max(200)).max(200).optional(),
     thumbnails: z.array(z.string().min(1).max(2000)).max(200).optional(),
@@ -36,6 +49,7 @@ export const CreateSchema = z.object({
 
 export const LegacyCreateSchema = z.object({
     body: z.string().min(1).max(20000),
+    explanation: z.string().max(20000).optional(),
     kind: z.union([z.literal("boolean"), z.literal("choice"), z.literal("text")]),
     tags: z.array(z.string().min(1).max(200)).max(200).optional(),
     thumbnails: z.array(z.string().min(1).max(2000)).max(200).optional(),

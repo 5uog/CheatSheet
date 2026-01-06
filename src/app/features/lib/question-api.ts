@@ -1,6 +1,6 @@
-// FILE: src/components/lib/question-api.ts
-import type { AnswerJson, Item, Mode, SortKey, Kind } from "./question-types";
-import { readJsonSafe } from "./question-utils";
+// FILE: src/app/features/lib/question-api.ts
+import type { AnswerJson, Item, Mode, SortKey, Kind } from "@/app/features/lib/question-types";
+import { readJsonSafe } from "@/app/features/lib/question-utils";
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
 
@@ -66,9 +66,10 @@ export async function apiListQuestions(
 }
 
 export async function apiCreateQuestion(payload: {
-    id?: number; // optional preferred ID (gap-fill / stable import)
+    id?: number;
     body: string;
     answer: AnswerJson;
+    explanation?: string;
     tags?: string[];
     thumbnails?: string[];
 }): Promise<ApiResult<{ item?: Item }>> {
@@ -81,7 +82,6 @@ export async function apiCreateQuestion(payload: {
     const json = await readJsonSafe<{ item?: Item; error?: string }>(res);
 
     if (!res.ok) {
-        // preserve status (e.g. 409 already exists)
         return { ok: false, error: json?.error ?? errMsg(res.status, "Create failed"), status: res.status };
     }
     return { ok: true, data: { item: json?.item } };
@@ -89,7 +89,7 @@ export async function apiCreateQuestion(payload: {
 
 export async function apiUpdateQuestion(
     id: number,
-    payload: { body: string; answer: AnswerJson; tags?: string[]; thumbnails?: string[] }
+    payload: { body: string; answer: AnswerJson; explanation?: string; tags?: string[]; thumbnails?: string[] }
 ): Promise<ApiResult<{ item?: Item }>> {
     const res = await fetch(`/api/questions/${id}`, {
         method: "PUT",

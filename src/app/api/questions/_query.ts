@@ -1,6 +1,16 @@
-// FILE: src/app/api/questions/_query.ts
-import type { Kind } from "./_schemas";
-import { safeJsonEach, safeJsonExtract } from "@/app/api/_shared/sql";
+/**
+ * FILE: src/app/api/questions/_query.ts
+ *
+ * This module contains query-string decoding helpers for the questions collection endpoint. It
+ * translates a small, transport-level parameter vocabulary into SQL fragments and bound-parameter
+ * arrays while keeping SQL construction isolated from route handlers. JSON-backed filters are
+ * expressed through wrappers that tolerate malformed JSON stored in text columns, so filters over
+ * tags and structured answer attributes remain evaluable even when individual rows contain invalid
+ * JSON payloads.
+ */
+
+import type { Kind } from "@/app/api/questions/_schemas";
+import { safeJsonEach, safeJsonExtractExpr } from "@/app/api/_shared/sql";
 
 export type SortKey = "id_desc" | "id_asc" | "created_desc" | "created_asc" | "updated_desc" | "updated_asc";
 export const SortKeys: readonly SortKey[] = [
@@ -59,8 +69,6 @@ export function buildFilters(params: { tag?: string; kind?: Kind | null; boolOnl
     const args: unknown[] = [];
 
     if (params.tag && params.tag.trim()) {
-        // IMPORTANT: json_each(<invalid json>) may throw even with WHERE json_valid(...).
-        // Use safeJsonEach wrapper to always provide a valid array.
         where.push(`
             EXISTS (
                 SELECT 1
@@ -72,18 +80,21 @@ export function buildFilters(params: { tag?: string; kind?: Kind | null; boolOnl
     }
 
     if (params.kind) {
-        where.push(`${safeJsonExtract("q.answer_json", "$.type")} = ?`);
-        args.push(params.kind);
+        const ex = safeJsonExtractExpr("q.answer_json", "$.type");
+        where.push(`${ex.sql} = ?`);
+        args.push(...ex.args, params.kind);
     }
 
     if (params.boolOnly === "true") {
-        where.push(
-            `${safeJsonExtract("q.answer_json", "$.type")} = 'boolean' AND ${safeJsonExtract("q.answer_json", "$.value")} = 1`
-        );
+        const exType = safeJsonExtractExpr("q.answer_json", "$.type");
+        const exVal = safeJsonExtractExpr("q.answer_json", "$.value");
+        where.push(`${exType.sql} = ? AND ${exVal.sql} = ?`);
+        args.push(...exType.args, "boolean", ...exVal.args, 1);
     } else if (params.boolOnly === "false") {
-        where.push(
-            `${safeJsonExtract("q.answer_json", "$.type")} = 'boolean' AND ${safeJsonExtract("q.answer_json", "$.value")} = 0`
-        );
+        const exType = safeJsonExtractExpr("q.answer_json", "$.type");
+        const exVal = safeJsonExtractExpr("q.answer_json", "$.value");
+        where.push(`${exType.sql} = ? AND ${exVal.sql} = ?`);
+        args.push(...exType.args, "boolean", ...exVal.args, 0);
     }
 
     return { where, args };
