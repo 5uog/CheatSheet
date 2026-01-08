@@ -1,4 +1,4 @@
-// FILE: src/app/features/panels/QuestionCreatePanel.tsx
+// FILE: src/app/features/components/QuestionCreatePanel.tsx
 "use client";
 
 import type React from "react";

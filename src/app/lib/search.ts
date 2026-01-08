@@ -1,5 +1,5 @@
 /**
- * FILE: src/lib/search.ts
+ * FILE: src/app/lib/search.ts
  *
  * This module implements a small query language parser used by the questions collection endpoint.
  * It tokenizes a user-supplied string, parses it into a boolean expression AST with support for
