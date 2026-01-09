@@ -12,62 +12,13 @@
  */
 
 import { db, ftsTokenizer, isSqliteCorruptionError, repairQuestionsFts } from "@/app/lib/db";
-import { parseQuery } from "@/app/lib/search";
+import { parseSearch as parseSearchCore } from "@/app/lib/search";
 import type { AnswerJson, Kind } from "@/app/api/questions/_schemas";
 import { normalizeChoiceAnswer, normalizeStringArray, serializeAnswer } from "@/app/api/questions/_schemas";
 import * as repo from "@/app/api/questions/_repo";
 
-export function shouldAutoFallbackToLike(originalQ: string) {
-    const q = (originalQ ?? "").trim();
-    if (!q) return false;
-
-    if (q.startsWith("=") || q.startsWith("~")) return false;
-    if (ftsTokenizer !== "trigram") return false;
-
-    const tokens: string[] = [];
-
-    const phraseRe = /"([^"]*)"/g;
-    let m: RegExpExecArray | null;
-    while ((m = phraseRe.exec(q)) !== null) {
-        const inner = (m[1] ?? "").trim();
-        if (inner) tokens.push(inner);
-    }
-
-    const qNoPhrases = q.replace(/"([^"]*)"/g, " ").trim();
-    const rawParts = qNoPhrases.split(/\s+/).filter(Boolean);
-
-    for (const part of rawParts) {
-        if (part === "OR" || part === "|") continue;
-        if (part === "(" || part === ")") continue;
-
-        const t0 = part.startsWith("-") ? part.slice(1) : part;
-        if (!t0) continue;
-
-        const t1 = t0.replace(/^[()]+|[()]+$/g, "");
-        if (!t1) continue;
-
-        tokens.push(t1);
-    }
-
-    for (const tok of tokens) {
-        const t = tok.endsWith("*") ? tok.slice(0, -1) : tok;
-        const clean = t.trim();
-        if (!clean) continue;
-        if (clean.length < 3) return true;
-    }
-
-    return false;
-}
-
 export function parseSearch(q: string) {
-    if (shouldAutoFallbackToLike(q)) {
-        const likeParsed = parseQuery(`~${q}`);
-        if (likeParsed.kind === "like") {
-            return { ...likeParsed, autoFallback: true as const };
-        }
-    }
-    const parsed = parseQuery(q);
-    return { ...parsed, autoFallback: false as const };
+    return parseSearchCore(q, { tokenizer: ftsTokenizer });
 }
 
 export function updateQuestionRobust(args: {

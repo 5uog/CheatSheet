@@ -38,6 +38,13 @@ export function EditorIdePanel(props: {
 
     const didInitRef = useRef(false);
 
+    const rootClass = useMemo(() => {
+        return cls(
+            "min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900/30 shadow p-5",
+            asMain ? "flex flex-col h-[calc(100dvh-120px)] min-h-[520px]" : ""
+        );
+    }, [asMain]);
+
     function emitDiagnostics(nextText: string) {
         const parsed = safeParseJson(nextText);
         if (!parsed.ok) {
@@ -262,7 +269,7 @@ export function EditorIdePanel(props: {
     }, [text]);
 
     return (
-        <section className={cls("min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900/30 shadow", asMain ? "p-5" : "p-5")}>
+        <section className={rootClass}>
             <div className="flex min-w-0 items-start justify-between gap-3">
                 <div className="min-w-0">
                     <div className="text-sm font-medium text-zinc-200">{t("editor.title")}</div>
@@ -270,7 +277,7 @@ export function EditorIdePanel(props: {
                 </div>
             </div>
 
-            <div className="mt-4 min-w-0 space-y-3">
+            <div className={cls("mt-4 min-w-0 space-y-3", asMain ? "flex-1 flex flex-col min-h-0" : "")}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                         <label className="text-xs text-zinc-400" htmlFor="editorMode">
@@ -326,8 +333,20 @@ export function EditorIdePanel(props: {
                     </div>
                 </div>
 
-                <div className="min-w-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/70">
-                    <div className="h-[min(70vh,560px)] w-full min-w-0">
+                <div
+                    className={cls(
+                        "min-w-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/70",
+                        asMain ? "flex-1 min-h-0" : ""
+                    )}
+                >
+                    <div
+                        className={cls(
+                            "w-full min-w-0",
+                            asMain
+                                ? "h-full min-h-55"
+                                : "h-[min(70vh,560px)]"
+                        )}
+                    >
                         <MonacoJsonEditor
                             value={text}
                             onChange={(next) => {
@@ -343,7 +362,11 @@ export function EditorIdePanel(props: {
                 <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-500">
                     <div className="min-w-0 truncate">
                         {footerHint}
-                        {dedupeKeyPreview ? <span className="ml-2">{t("editor.dedupe_example")}: {dedupeKeyPreview}</span> : null}
+                        {dedupeKeyPreview ? (
+                            <span className="ml-2">
+                                {t("editor.dedupe_example")}: {dedupeKeyPreview}
+                            </span>
+                        ) : null}
                     </div>
                     {loading ? <div>{t("common.working")}</div> : null}
                 </div>
